@@ -123,13 +123,16 @@ def manual_scrub():
     
     # Convert RGBA to grayscale mask
     if mask_np.shape[2] == 4:
-        # Use alpha channel if present, otherwise just green channel of the draw
-        mask = mask_np[:, :, 0] # Our draw was white on black, so any channel works
+        # Use alpha channel to determine masked area (white where alpha > 0)
+        mask = mask_np[:, :, 3] 
     else:
         mask = cv2.cvtColor(mask_np, cv2.COLOR_RGB2GRAY)
     
     # Ensure mask is same size as image
     mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
+    
+    # Apply a slight blur to the mask edges for smoother inpainting
+    mask = cv2.GaussianBlur(mask, (3, 3), 0)
     
     # Inpaint
     result = cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
