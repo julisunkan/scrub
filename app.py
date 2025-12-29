@@ -59,8 +59,8 @@ import google.generativeai as genai
 def remove_text_with_gemini(image_path, output_path, api_key):
     try:
         genai.configure(api_key=api_key)
-        # Using gemini-1.5-flash which is standard for vision/text tasks
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Using a more robust model name for Gemini 1.5 Flash
+        model = genai.GenerativeModel('gemini-1.5-flash-001')
         
         # Load image for Gemini
         img = Image.open(image_path)
@@ -144,8 +144,8 @@ def test_api_key():
     
     try:
         genai.configure(api_key=api_key)
-        # Try standard gemini-1.5-flash
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Using a more robust model name for Gemini 1.5 Flash
+        model = genai.GenerativeModel('gemini-1.5-flash-001')
         # Perform a lightweight test request
         response = model.generate_content("test")
         if response:
