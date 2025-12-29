@@ -132,6 +132,23 @@ def download_zip():
         download_name='processed_images.zip'
     )
 
+@app.route('/test-api-key', methods=['POST'])
+def test_api_key():
+    api_key = request.json.get('api_key')
+    if not api_key:
+        return jsonify({'success': False, 'error': 'No API key provided'}), 400
+    
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Perform a lightweight test request
+        response = model.generate_content("test")
+        if response:
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': 'Empty response from Gemini'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 import base64
 
 @app.route('/manual-scrub', methods=['POST'])
