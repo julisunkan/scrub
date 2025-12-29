@@ -56,7 +56,7 @@ import google.generativeai as genai
 def remove_text_with_gemini(image_path, output_path, api_key):
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
         # Load image for Gemini
         img = Image.open(image_path)
@@ -140,7 +140,7 @@ def test_api_key():
     
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         # Perform a lightweight test request
         response = model.generate_content("test")
         if response:
