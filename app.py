@@ -34,15 +34,14 @@ def remove_text_from_image(image_path, output_path):
     
     n_boxes = len(data['text'])
     for i in range(n_boxes):
-        if int(data['conf'][i]) > 0 and data['text'][i].strip():  # Only boxes with text and confidence
+        if int(data['conf'][i]) > 0 and data['text'][i].strip():
             (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
-            # Draw a white rectangle on the mask where text is found
-            # Use smaller padding to be more precise
-            cv2.rectangle(mask, (x-1, y-1), (x + w + 1, y + h + 1), 255, -1)
+            # Use a slightly larger radius for background reconstruction
+            cv2.rectangle(mask, (x-2, y-2), (x + w + 2, y + h + 2), 255, -1)
     
-    # Inpaint the original image using the mask
-    # TELEA algorithm is generally better for thin structures like text
-    result = cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
+    # Use Fast Marching Method (FMM) which is often better for reconstructing larger background textures
+    # We use a slightly larger inpaint radius to ensure texture continuity
+    result = cv2.inpaint(img, mask, 5, cv2.INPAINT_TELEA)
     
     # Save the result
     cv2.imwrite(output_path, result)
