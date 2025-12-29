@@ -34,20 +34,10 @@
     <div class="max-w-4xl mx-auto p-6">
         <header class="text-center mb-10">
             <h1 class="text-4xl font-bold text-gray-800 mb-2">CleanShot</h1>
-            <p class="text-gray-600">Remove text and numbers from your images instantly</p>
+            <p class="text-gray-600">Extract background by removing text and numbers instantly</p>
         </header>
 
         <main class="bg-white rounded-xl shadow-lg p-8">
-            <div class="mb-6">
-                <label for="api-key" class="block text-sm font-medium text-gray-700 mb-2">Gemini API Key (Optional - Improves removal)</label>
-                <div class="flex space-x-2">
-                    <input type="password" id="api-key" placeholder="Enter your Gemini API key" class="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
-                    <button id="test-api-key" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors whitespace-nowrap">Test Key</button>
-                </div>
-                <p id="api-test-status" class="text-xs mt-1 hidden"></p>
-                <p class="text-xs text-gray-500 mt-1">If provided, the app will use Gemini 1.5 Flash to better identify and remove text.</p>
-            </div>
-
             <div id="drop-zone" class="border-4 border-dashed border-blue-200 rounded-xl p-10 text-center cursor-pointer hover:border-blue-400 transition-colors mb-8">
                 <input type="file" id="file-input" multiple accept="image/*" class="hidden">
                 <div class="space-y-4">
@@ -76,7 +66,7 @@
                     <div class="canvas-container bg-gray-200 rounded-lg overflow-hidden">
                         <canvas id="manual-scrub-canvas"></canvas>
                     </div>
-                    <p class="text-sm text-gray-500 mt-2">Draw over any remaining text to remove it.</p>
+                    <p class="text-sm text-gray-500 mt-2">Draw over any remaining text to remove it without blurring the background.</p>
                 </div>
             </div>
 
@@ -106,46 +96,6 @@
         const ctx = scrubCanvas.getContext('2d');
         const saveScrubBtn = document.getElementById('save-scrub');
         const cancelScrubBtn = document.getElementById('cancel-scrub');
-        const testApiKeyBtn = document.getElementById('test-api-key');
-        const apiTestStatus = document.getElementById('api-test-status');
-
-        testApiKeyBtn.addEventListener('click', async () => {
-            const apiKey = document.getElementById('api-key').value;
-            if (!apiKey) {
-                apiTestStatus.textContent = 'Please enter an API key first.';
-                apiTestStatus.className = 'text-xs mt-1 text-red-500';
-                apiTestStatus.classList.remove('hidden');
-                return;
-            }
-
-            testApiKeyBtn.disabled = true;
-            testApiKeyBtn.textContent = 'Testing...';
-            apiTestStatus.classList.add('hidden');
-
-            try {
-                const response = await fetch('/test-api-key', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ api_key: apiKey })
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    apiTestStatus.textContent = 'API Key is working correctly!';
-                    apiTestStatus.className = 'text-xs mt-1 text-green-500';
-                } else {
-                    apiTestStatus.textContent = 'API Key failed: ' + (data.error || 'Unknown error');
-                    apiTestStatus.className = 'text-xs mt-1 text-red-500';
-                }
-            } catch (error) {
-                apiTestStatus.textContent = 'Error testing API key.';
-                apiTestStatus.className = 'text-xs mt-1 text-red-500';
-            } finally {
-                testApiKeyBtn.disabled = false;
-                testApiKeyBtn.textContent = 'Test Key';
-                apiTestStatus.classList.remove('hidden');
-            }
-        });
 
         let processedFiles = [];
         let currentEditingFile = null;
@@ -177,13 +127,9 @@
         async function handleFiles(files) {
             if (files.length === 0) return;
 
-            const apiKey = document.getElementById('api-key').value;
             const formData = new FormData();
             for (let i = 0; i < files.length; i++) {
                 formData.append('images', files[i]);
-            }
-            if (apiKey) {
-                formData.append('gemini_api_key', apiKey);
             }
 
             loading.classList.remove('hidden');
@@ -398,4 +344,3 @@
     </script>
 </body>
 </html>
-

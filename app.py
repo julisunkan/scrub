@@ -7,7 +7,6 @@ from werkzeug.utils import secure_filename
 import zipfile
 from io import BytesIO
 from PIL import Image
-import google.generativeai as genai
 import base64
 
 app = Flask(__name__)
@@ -29,42 +28,27 @@ def remove_text_from_image(image_path, output_path):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
     # Get text data from OCR
-    data = pytesseract.image_to_data(gray, output_type=pytesseract.Output.DICT)
+    # We use a custom config for better accuracy with numbers and text
+    custom_config = r'--oem 3 --psm 11'
+    data = pytesseract.image_to_data(gray, config=custom_config, output_type=pytesseract.Output.DICT)
     
     # Create a mask for inpainting
     mask = np.zeros(img.shape[:2], dtype=np.uint8)
     
     n_boxes = len(data['text'])
     for i in range(n_boxes):
-        if int(data['conf'][i]) > 0 and data['text'][i].strip():
+        if int(data['conf'][i]) > 10 and data['text'][i].strip():
             (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
             # Use a slightly larger radius for background reconstruction
             cv2.rectangle(mask, (x-2, y-2), (x + w + 2, y + h + 2), 255, -1)
     
     # Use Fast Marching Method (FMM) which is often better for reconstructing larger background textures
-    # We use a slightly larger inpaint radius to ensure texture continuity
+    # Radius of 5 is usually a good balance for background extraction
     result = cv2.inpaint(img, mask, 5, cv2.INPAINT_TELEA)
     
     # Save the result
     cv2.imwrite(output_path, result)
     return True
-
-def remove_text_with_gemini(image_path, output_path, api_key):
-    try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash-001')
-        
-        img = Image.open(image_path)
-        prompt = "Identify all text and numbers in this image. Provide the bounding box coordinates [ymin, xmin, ymax, xmax] for each piece of text found. Format as a JSON list of lists."
-        
-        response = model.generate_content([prompt, img])
-        # Note: In a production environment, we would parse Gemini's coordinates here.
-        # For now, we use Gemini's validation to improve the overall pipeline.
-        
-        return remove_text_from_image(image_path, output_path)
-    except Exception as e:
-        print(f"Gemini error: {e}")
-        return remove_text_from_image(image_path, output_path)
 
 @app.route('/')
 def index():
@@ -72,7 +56,6 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
-    api_key = request.form.get('gemini_api_key')
     if 'images' not in request.files:
         return jsonify({'error': 'No images uploaded'}), 400
     
@@ -90,13 +73,7 @@ def upload_files():
         processed_filename = 'processed_' + filename
         processed_path = os.path.join(app.config['PROCESSED_FOLDER'], processed_filename)
         
-        success = False
-        if api_key:
-            success = remove_text_with_gemini(upload_path, processed_path, api_key)
-        else:
-            success = remove_text_from_image(upload_path, processed_path)
-            
-        if success:
+        if remove_text_from_image(upload_path, processed_path):
             processed_files.append({
                 'original': filename,
                 'processed': processed_filename,
@@ -123,22 +100,6 @@ def download_zip():
         download_name='processed_images.zip'
     )
 
-@app.route('/test-api-key', methods=['POST'])
-def test_api_key():
-    api_key = request.json.get('api_key')
-    if not api_key:
-        return jsonify({'success': False, 'error': 'No API key provided'}), 400
-    
-    try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash-001')
-        response = model.generate_content("test")
-        if response:
-            return jsonify({'success': True})
-        return jsonify({'success': False, 'error': 'Empty response from Gemini'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
 @app.route('/manual-scrub', methods=['POST'])
 def manual_scrub():
     data = request.json
@@ -164,6 +125,7 @@ def manual_scrub():
         mask = cv2.cvtColor(mask_np, cv2.COLOR_RGB2GRAY)
     
     mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
+    # Keep radius small for manual scrub to prevent blurring the extracted background
     result = cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
     cv2.imwrite(file_path, result)
     
