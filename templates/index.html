@@ -58,6 +58,7 @@
                 <div class="flex justify-between items-center">
                     <h2 class="text-2xl font-bold text-gray-800">Manual Scrub</h2>
                     <div class="space-x-2">
+                        <button id="undo-scrub" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg transition-colors">Undo</button>
                         <button id="cancel-scrub" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">Cancel</button>
                         <button id="save-scrub" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors">Apply Scrub</button>
                     </div>
@@ -96,12 +97,17 @@
         const ctx = scrubCanvas.getContext('2d');
         const saveScrubBtn = document.getElementById('save-scrub');
         const cancelScrubBtn = document.getElementById('cancel-scrub');
+        const undoScrubBtn = document.getElementById('undo-scrub');
 
         let processedFiles = [];
         let currentEditingFile = null;
         let isDrawing = false;
         let maskCanvas = document.createElement('canvas');
         let maskCtx = maskCanvas.getContext('2d');
+        
+        // Undo stacks
+        let drawHistory = [];
+        let maskHistory = [];
 
         dropZone.addEventListener('click', () => fileInput.click());
 
@@ -192,6 +198,10 @@
                 // Clear mask - fully transparent
                 maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
                 
+                // Reset history
+                drawHistory = [ctx.getImageData(0, 0, scrubCanvas.width, scrubCanvas.height)];
+                maskHistory = [maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height)];
+                
                 ctx.drawImage(img, 0, 0);
                 
                 // Scale canvas to fit container if too large
@@ -274,10 +284,23 @@
         }
 
         function stopDrawing() {
+            if (isDrawing) {
+                drawHistory.push(ctx.getImageData(0, 0, scrubCanvas.width, scrubCanvas.height));
+                maskHistory.push(maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height));
+            }
             isDrawing = false;
             ctx.beginPath();
             maskCtx.beginPath();
         }
+
+        undoScrubBtn.addEventListener('click', () => {
+            if (drawHistory.length > 1) {
+                drawHistory.pop();
+                maskHistory.pop();
+                ctx.putImageData(drawHistory[drawHistory.length - 1], 0, 0);
+                maskCtx.putImageData(maskHistory[maskHistory.length - 1], 0, 0);
+            }
+        });
 
         saveScrubBtn.addEventListener('click', async () => {
             const maskData = maskCanvas.toDataURL('image/png');
