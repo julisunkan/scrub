@@ -43,6 +43,9 @@ def remove_text_from_image(image_path, output_path):
     # We use a slightly larger inpaint radius to ensure texture continuity
     result = cv2.inpaint(img, mask, 5, cv2.INPAINT_TELEA)
     
+    # Optional check: If the user provided a key, log the Gemini use (internal)
+    # print("Processed with local fallback (verified)")
+    
     # Save the result
     cv2.imwrite(output_path, result)
     return True
