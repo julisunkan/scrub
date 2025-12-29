@@ -20,6 +20,14 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        #manual-scrub-canvas {
+            cursor: crosshair;
+            touch-action: none;
+        }
+        .canvas-container {
+            position: relative;
+            display: inline-block;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen font-sans">
@@ -46,6 +54,22 @@
                 <p class="text-blue-600 font-medium">Processing your images...</p>
             </div>
 
+            <div id="scrub-editor" class="hidden space-y-4 mb-8">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold text-gray-800">Manual Scrub</h2>
+                    <div class="space-x-2">
+                        <button id="cancel-scrub" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">Cancel</button>
+                        <button id="save-scrub" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors">Apply Scrub</button>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center">
+                    <div class="canvas-container bg-gray-200 rounded-lg overflow-hidden">
+                        <canvas id="manual-scrub-canvas"></canvas>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-2">Draw over any remaining text to remove it.</p>
+                </div>
+            </div>
+
             <div id="results" class="hidden space-y-8">
                 <div class="flex justify-between items-center">
                     <h2 class="text-2xl font-bold text-gray-800">Results</h2>
@@ -67,8 +91,17 @@
         const previewGrid = document.getElementById('preview-grid');
         const loading = document.getElementById('loading');
         const downloadAllBtn = document.getElementById('download-all');
+        const scrubEditor = document.getElementById('scrub-editor');
+        const scrubCanvas = document.getElementById('manual-scrub-canvas');
+        const ctx = scrubCanvas.getContext('2d');
+        const saveScrubBtn = document.getElementById('save-scrub');
+        const cancelScrubBtn = document.getElementById('cancel-scrub');
 
         let processedFiles = [];
+        let currentEditingFile = null;
+        let isDrawing = false;
+        let maskCanvas = document.createElement('canvas');
+        let maskCtx = maskCanvas.getContext('2d');
 
         dropZone.addEventListener('click', () => fileInput.click());
 
@@ -101,6 +134,7 @@
 
             loading.classList.remove('hidden');
             results.classList.add('hidden');
+            scrubEditor.classList.add('hidden');
             previewGrid.innerHTML = '';
 
             try {
@@ -122,13 +156,17 @@
         }
 
         function renderPreviews(files) {
+            previewGrid.innerHTML = '';
             files.forEach(file => {
                 const card = document.createElement('div');
                 card.className = 'bg-white border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow';
                 card.innerHTML = `
                     <div class="relative group">
-                        <img src="${file.url}" alt="Processed image" class="w-full h-48 object-cover">
-                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
+                        <img src="${file.url}?t=${Date.now()}" alt="Processed image" class="w-full h-48 object-cover">
+                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex flex-col items-center justify-center space-y-2">
+                            <button onclick="startScrub('${file.processed}')" class="bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                                Manual Scrub
+                            </button>
                             <a href="${file.url}" download="${file.processed}" class="bg-white text-gray-800 px-4 py-2 rounded-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
                                 Download
                             </a>
@@ -141,6 +179,140 @@
                 previewGrid.appendChild(card);
             });
         }
+
+        function startScrub(filename) {
+            currentEditingFile = filename;
+            const img = new Image();
+            img.onload = () => {
+                scrubCanvas.width = img.width;
+                scrubCanvas.height = img.height;
+                maskCanvas.width = img.width;
+                maskCanvas.height = img.height;
+                
+                // Clear mask
+                maskCtx.fillStyle = 'black';
+                maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+                
+                ctx.drawImage(img, 0, 0);
+                
+                // Scale canvas to fit container if too large
+                const containerWidth = scrubEditor.offsetWidth - 40;
+                if (img.width > containerWidth) {
+                    const ratio = containerWidth / img.width;
+                    scrubCanvas.style.width = `${containerWidth}px`;
+                    scrubCanvas.style.height = `${img.height * ratio}px`;
+                } else {
+                    scrubCanvas.style.width = 'auto';
+                    scrubCanvas.style.height = 'auto';
+                }
+                
+                results.classList.add('hidden');
+                scrubEditor.classList.remove('hidden');
+            };
+            img.src = `/static/processed/${filename}?t=${Date.now()}`;
+        }
+
+        scrubCanvas.addEventListener('mousedown', startDrawing);
+        scrubCanvas.addEventListener('mousemove', draw);
+        scrubCanvas.addEventListener('mouseup', stopDrawing);
+        scrubCanvas.addEventListener('mouseout', stopDrawing);
+        
+        // Touch events
+        scrubCanvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            scrubCanvas.dispatchEvent(mouseEvent);
+        });
+        scrubCanvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            scrubCanvas.dispatchEvent(mouseEvent);
+        });
+        scrubCanvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            scrubCanvas.dispatchEvent(new MouseEvent('mouseup'));
+        });
+
+        function startDrawing(e) {
+            isDrawing = true;
+            draw(e);
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            
+            const rect = scrubCanvas.getBoundingClientRect();
+            const scaleX = scrubCanvas.width / rect.width;
+            const scaleY = scrubCanvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            
+            // Draw on visual canvas
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 20;
+            ctx.lineCap = 'round';
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            
+            // Draw on mask canvas
+            maskCtx.strokeStyle = 'white';
+            maskCtx.lineWidth = 20;
+            maskCtx.lineCap = 'round';
+            maskCtx.lineTo(x, y);
+            maskCtx.stroke();
+            maskCtx.beginPath();
+            maskCtx.moveTo(x, y);
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+            ctx.beginPath();
+            maskCtx.beginPath();
+        }
+
+        saveScrubBtn.addEventListener('click', async () => {
+            const maskData = maskCanvas.toDataURL('image/png');
+            loading.classList.remove('hidden');
+            scrubEditor.classList.add('hidden');
+            
+            try {
+                const response = await fetch('/manual-scrub', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: currentEditingFile,
+                        mask: maskData
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    renderPreviews(processedFiles);
+                }
+                results.classList.remove('hidden');
+            } catch (error) {
+                console.error('Error applying scrub:', error);
+                alert('Failed to apply manual scrub.');
+                results.classList.remove('hidden');
+            } finally {
+                loading.classList.add('hidden');
+            }
+        });
+
+        cancelScrubBtn.addEventListener('click', () => {
+            scrubEditor.classList.add('hidden');
+            results.classList.remove('hidden');
+        });
 
         downloadAllBtn.addEventListener('click', async () => {
             const filenames = processedFiles.map(f => f.processed);
@@ -173,3 +345,4 @@
     </script>
 </body>
 </html>
+

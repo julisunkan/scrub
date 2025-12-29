@@ -98,5 +98,46 @@ def download_zip():
         download_name='processed_images.zip'
     )
 
+import base64
+
+@app.route('/manual-scrub', methods=['POST'])
+def manual_scrub():
+    data = request.json
+    filename = data.get('filename')
+    mask_data = data.get('mask')
+    
+    if not filename or not mask_data:
+        return jsonify({'error': 'Missing data'}), 400
+    
+    # Load processed image
+    file_path = os.path.join(app.config['PROCESSED_FOLDER'], filename)
+    img = cv2.imread(file_path)
+    if img is None:
+        return jsonify({'error': 'Image not found'}), 404
+    
+    # Decode mask
+    header, encoded = mask_data.split(",", 1)
+    binary_data = base64.b64decode(encoded)
+    mask_img = Image.open(BytesIO(binary_data))
+    mask_np = np.array(mask_img)
+    
+    # Convert RGBA to grayscale mask
+    if mask_np.shape[2] == 4:
+        # Use alpha channel if present, otherwise just green channel of the draw
+        mask = mask_np[:, :, 0] # Our draw was white on black, so any channel works
+    else:
+        mask = cv2.cvtColor(mask_np, cv2.COLOR_RGB2GRAY)
+    
+    # Ensure mask is same size as image
+    mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
+    
+    # Inpaint
+    result = cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
+    
+    # Overwrite the processed image
+    cv2.imwrite(file_path, result)
+    
+    return jsonify({'success': True})
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
