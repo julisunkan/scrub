@@ -165,10 +165,7 @@ def manual_scrub():
     # Ensure mask is same size as image
     mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
     
-    # Apply a slight blur to the mask edges for smoother inpainting
-    mask = cv2.GaussianBlur(mask, (3, 3), 0)
-    
-    # Inpaint
+    # Inpaint without extra blurring to maintain sharpness
     result = cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
     
     # Overwrite the processed image
