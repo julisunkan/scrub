@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CleanShot - Remove Text from Images</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#4a90e2">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+    <div class="max-w-4xl mx-auto p-6">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">CleanShot</h1>
+            <p class="text-gray-600">Remove text and numbers from your images instantly</p>
+        </header>
+
+        <main class="bg-white rounded-xl shadow-lg p-8">
+            <div id="drop-zone" class="border-4 border-dashed border-blue-200 rounded-xl p-10 text-center cursor-pointer hover:border-blue-400 transition-colors mb-8">
+                <input type="file" id="file-input" multiple accept="image/*" class="hidden">
+                <div class="space-y-4">
+                    <svg class="mx-auto h-12 w-12 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    <p class="text-xl text-gray-700">Drop images here or click to upload</p>
+                    <p class="text-sm text-gray-500">Supports JPG, PNG, WEBP</p>
+                </div>
+            </div>
+
+            <div id="loading" class="hidden flex flex-col items-center space-y-4 mb-8">
+                <div class="loader"></div>
+                <p class="text-blue-600 font-medium">Processing your images...</p>
+            </div>
+
+            <div id="results" class="hidden space-y-8">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold text-gray-800">Results</h2>
+                    <button id="download-all" class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg font-semibold transition-colors">
+                        Download All (ZIP)
+                    </button>
+                </div>
+                <div id="preview-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Previews will be inserted here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const results = document.getElementById('results');
+        const previewGrid = document.getElementById('preview-grid');
+        const loading = document.getElementById('loading');
+        const downloadAllBtn = document.getElementById('download-all');
+
+        let processedFiles = [];
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-blue-500');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-blue-500');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-500');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', () => {
+            handleFiles(fileInput.files);
+        });
+
+        async function handleFiles(files) {
+            if (files.length === 0) return;
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('images', files[i]);
+            }
+
+            loading.classList.remove('hidden');
+            results.classList.add('hidden');
+            previewGrid.innerHTML = '';
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                processedFiles = data.files;
+                renderPreviews(data.files);
+                results.classList.remove('hidden');
+            } catch (error) {
+                console.error('Error uploading images:', error);
+                alert('An error occurred while processing your images.');
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        function renderPreviews(files) {
+            files.forEach(file => {
+                const card = document.createElement('div');
+                card.className = 'bg-white border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow';
+                card.innerHTML = `
+                    <div class="relative group">
+                        <img src="${file.url}" alt="Processed image" class="w-full h-48 object-cover">
+                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
+                            <a href="${file.url}" download="${file.processed}" class="bg-white text-gray-800 px-4 py-2 rounded-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                                Download
+                            </a>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <p class="text-sm text-gray-600 truncate">${file.original}</p>
+                    </div>
+                `;
+                previewGrid.appendChild(card);
+            });
+        }
+
+        downloadAllBtn.addEventListener('click', async () => {
+            const filenames = processedFiles.map(f => f.processed);
+            const response = await fetch('/download-zip', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ filenames })
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'processed_images.zip';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            }
+        });
+
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js');
+            });
+        }
+    </script>
+</body>
+</html>
