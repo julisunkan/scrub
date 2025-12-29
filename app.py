@@ -60,7 +60,7 @@ def upload_files():
     processed_files = []
     
     for file in files:
-        if file.filename == '':
+        if file is None or file.filename == '' or file.filename is None:
             continue
         
         filename = secure_filename(file.filename)
