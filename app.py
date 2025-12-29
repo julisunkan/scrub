@@ -56,7 +56,7 @@ import google.generativeai as genai
 def remove_text_with_gemini(image_path, output_path, api_key):
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        model = genai.GenerativeModel('gemini-pro')
         
         # Load image for Gemini
         img = Image.open(image_path)
@@ -140,7 +140,8 @@ def test_api_key():
     
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        # Use 'gemini-pro' as a stable fallback for testing
+        model = genai.GenerativeModel('gemini-pro')
         # Perform a lightweight test request
         response = model.generate_content("test")
         if response:
@@ -182,7 +183,7 @@ def manual_scrub():
     # Ensure mask is same size as image
     mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
     
-    # Inpaint without extra blurring to maintain sharpness
+    # Use a small radius for inpainting to avoid bleeding/blurring
     result = cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
     
     # Overwrite the processed image
